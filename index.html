@@ -437,7 +437,7 @@ function processRows(rows) {
     const business = row[m.business] || '—';
     const id       = email || 'row-' + idx;
 
-    let reason = null, type = null, priority = 9;
+    let reason = null, type = null, priority = 9, reactivateStage = null;
     const feb2026 = new Date('2026-02-01');
     feb2026.setHours(0,0,0,0);
     const signupCopy = new Date(signupDate);
@@ -455,11 +455,22 @@ function processRows(rows) {
       reason = '2-week trial ending — convert to paid';
       type = 'buynow'; priority = 3;
     } else if (days > 14 || isPreFeb2026) {
-      reason = 'Signed up ' + signupDate.toLocaleDateString('en-AU', {day:'numeric',month:'short',year:'numeric'}) + ' — re-engage and reactivate';
+      // Work out what stage they reached
+      let stage, stageTag;
+      if (evDone && profileDone && dreamDone) {
+        stage = 'Fully onboarded — gone quiet'; stageTag = 'complete';
+      } else if (evDone && (!profileDone || !dreamDone)) {
+        const missing = [!profileDone && 'Profile Setup', !dreamDone && 'Dream Analyser'].filter(Boolean).join(' & ');
+        stage = 'Needs ' + missing; stageTag = 'partial';
+      } else {
+        stage = 'Never completed Everything'; stageTag = 'notstarted';
+      }
+      reason = 'Signed up ' + signupDate.toLocaleDateString('en-AU', {day:'numeric',month:'short',year:'numeric'}) + ' — ' + stage;
       type = 'reactivate'; priority = 4;
+      reactivateStage = stageTag;
     }
 
-    if (reason) calls.push({ id, name, phone, email, business, reason, type, priority, days });
+    if (reason) calls.push({ id, name, phone, email, business, reason, type, priority, days, reactivateStage });
   });
 
   return calls.sort((a, b) => a.priority - b.priority || a.days - b.days);
@@ -562,6 +573,19 @@ function makeCard(c, isCalled) {
         <div class="call-name-row">
           <span class="call-name">${c.name}</span>
           <span class="badge" style="color:${t.color};background:${t.bg};border-color:${t.border}">${t.icon} ${t.label}</span>
+          ${c.type === 'reactivate' && c.reactivateStage ? `<span class="badge" style="color:${
+            c.reactivateStage === 'complete'    ? '#0f6e56' :
+            c.reactivateStage === 'partial'     ? '#185fa5' : '#854f0b'
+          };background:${
+            c.reactivateStage === 'complete'    ? '#e1f5ee' :
+            c.reactivateStage === 'partial'     ? '#e6f1fb' : '#faeeda'
+          };border-color:${
+            c.reactivateStage === 'complete'    ? '#1d9e75' :
+            c.reactivateStage === 'partial'     ? '#378add' : '#ef9f27'
+          }">${
+            c.reactivateStage === 'complete'    ? '✅ Fully onboarded' :
+            c.reactivateStage === 'partial'     ? '🔷 Partial setup' : '⭕ Not started'
+          }</span>` : ''}
         </div>
         <p class="call-reason">${c.reason}</p>
         <div class="call-contact">
