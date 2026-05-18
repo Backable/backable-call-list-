@@ -260,7 +260,15 @@ async function syncFromCloud() {
       contactArchive = record.contactArchive;
     }
     if (record.contacts && record.contacts.length) {
-      contacts = record.contacts;
+      // Re-derive reactivateStage for any contact missing it (e.g. saved before this feature existed)
+      contacts = record.contacts.map(c => {
+        if (c.type === 'reactivate' && !c.reactivateStage) {
+          // We don't have the original completion fields, so default to notstarted
+          // The next CSV upload will set it correctly
+          c.reactivateStage = 'notstarted';
+        }
+        return c;
+      });
       document.getElementById('upload-label').textContent = '↑ Upload new Excel to refresh contact list';
       document.getElementById('content').style.display = 'block';
       const ts = record.updatedAt ? ` · Updated ${new Date(record.updatedAt).toLocaleString('en-AU', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}` : '';
