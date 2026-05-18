@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backable Call Sheet</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f4f0; min-height: 100vh; color: #1a1a18; }
+  button { font-family: inherit; cursor: pointer; }
+  input { font-family: inherit; }
+
+  /* LOGIN */
+  #login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1rem; }
+  .login-card { background: #fff; border: 0.5px solid #e0ddd6; border-radius: 14px; padding: 2rem; width: 100%; max-width: 400px; }
+  .login-icon { width: 40px; height: 40px; background: #1d9e75; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 16px; }
+  .login-card h1 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+  .login-card p { font-size: 14px; color: #6b6a65; margin-bottom: 20px; }
+  .text-input { width: 100%; padding: 10px 12px; font-size: 15px; border: 0.5px solid #d0cec5; border-radius: 8px; margin-bottom: 12px; color: #1a1a18; outline: none; }
+  .text-input:focus { border-color: #1d9e75; box-shadow: 0 0 0 3px rgba(29,158,117,0.1); }
+  .btn-primary { width: 100%; padding: 10px 0; font-size: 14px; font-weight: 500; background: #1d9e75; color: #fff; border: none; border-radius: 8px; transition: background 0.15s; }
+  .btn-primary:hover:not(:disabled) { background: #0f6e56; }
+  .btn-primary:disabled { background: #e0ddd6; color: #aaa; cursor: default; }
+
+  /* SETUP BANNER */
+  #setup-banner { background: #faeeda; border: 1px solid #ef9f27; border-radius: 10px; padding: 14px 16px; margin-bottom: 1rem; font-size: 13px; color: #854f0b; line-height: 1.6; display: none; }
+  #setup-banner strong { display: block; margin-bottom: 4px; font-size: 14px; }
+  #setup-banner input { width: 100%; margin-top: 8px; padding: 8px 10px; font-size: 13px; border: 1px solid #ef9f27; border-radius: 6px; color: #1a1a18; }
+  #setup-banner button { margin-top: 8px; padding: 6px 14px; font-size: 13px; background: #854f0b; color: #fff; border: none; border-radius: 6px; }
+
+  /* MAIN */
+  #main-screen { display: none; max-width: 700px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+  .top-bar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 8px; }
+  .top-bar h1 { font-size: 20px; font-weight: 600; }
+  .top-meta { font-size: 13px; color: #6b6a65; margin-top: 3px; }
+  .top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .btn-small { font-size: 12px; padding: 5px 11px; border: 0.5px solid #d0cec5; border-radius: 7px; background: #fff; color: #1a1a18; }
+  .btn-small:hover { background: #f5f4f0; }
+  .sync-label { font-size: 12px; }
+
+  .upload-zone { border: 1.5px dashed #d0cec5; border-radius: 12px; padding: 1.25rem; text-align: center; cursor: pointer; margin-bottom: 1rem; transition: all 0.15s; }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: #1d9e75; background: #e1f5ee; }
+  .upload-zone p { font-size: 14px; color: #6b6a65; }
+  .upload-zone small { font-size: 11px; color: #aaa; display: block; margin-top: 4px; }
+
+  .error-box { padding: 10px 14px; background: #fcebeb; color: #a32d2d; border-radius: 8px; font-size: 13px; margin-bottom: 1rem; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  @media (max-width: 480px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+  .stat-card { background: #fff; border: 0.5px solid #e0ddd6; border-radius: 10px; padding: 12px; text-align: center; }
+  .stat-label { font-size: 11px; color: #6b6a65; margin-bottom: 4px; }
+  .stat-value { font-size: 22px; font-weight: 600; }
+
+  .call-card { background: #fff; border: 0.5px solid #e0ddd6; border-radius: 10px; border-top-left-radius: 3px; border-bottom-left-radius: 3px; padding: 14px 16px; margin-bottom: 8px; transition: opacity 0.2s; }
+  .call-card.called { background: #f8f8f6; opacity: 0.55; }
+  .call-card-inner { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .call-info { flex: 1; min-width: 0; }
+  .call-name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; flex-wrap: wrap; }
+  .call-name { font-weight: 600; font-size: 15px; }
+  .badge { font-size: 11px; padding: 2px 9px; border-radius: 20px; font-weight: 600; border-width: 1px; border-style: solid; white-space: nowrap; }
+  .call-reason { font-size: 13px; color: #6b6a65; margin-bottom: 7px; line-height: 1.4; }
+  .call-contact { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; }
+  .call-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+  .day-tag { font-size: 11px; color: #aaa; }
+  .called-label { font-size: 12px; color: #0f6e56; font-weight: 500; }
+  .called-by { font-size: 11px; color: #aaa; margin-top: 2px; text-align: right; }
+  .btn-mark { font-size: 12px; padding: 6px 12px; border-radius: 7px; border: 0.5px solid #d0cec5; background: #fff; color: #1a1a18; white-space: nowrap; }
+  .btn-mark:hover { background: #f5f4f0; }
+  .btn-email { border-color: #378add; color: #185fa5; }
+  .btn-email:hover { background: #e6f1fb; }
+
+  .section-label { font-size: 13px; color: #aaa; font-weight: 500; margin: 1.5rem 0 10px; }
+  .empty-msg { text-align: center; color: #6b6a65; font-size: 14px; padding: 2rem 0; }
+  .done-msg { text-align: center; color: #0f6e56; font-size: 14px; padding: 1rem 0; font-weight: 500; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-icon">📞</div>
+    <h1>Backable call sheet</h1>
+    <p>Who's making calls today?</p>
+    <input class="text-input" id="caller-input" type="text" placeholder="Your name" autocomplete="off">
+    <button class="btn-primary" id="start-btn" disabled onclick="startApp()">Start →</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="main-screen">
+
+  <div id="setup-banner">
+    <strong>⚙️ Shared sync setup</strong>
+    Paste your JSONBin Master Key below. Upload your Excel first — a Bin ID will be created automatically and shown here to share with your team.
+    <input type="text" id="api-key-input" placeholder="$2b$10$...your master key...">
+    <div id="bin-id-row">
+      <input type="text" id="bin-id-input" placeholder="Bin ID — auto-created on first upload, or paste one from a colleague">
+      <button id="copy-bin-btn" onclick="copyBinId()" style="display:none; margin-left:6px; padding:6px 10px; font-size:12px; background:#185fa5; color:#fff; border:none; border-radius:6px; cursor:pointer;">Copy Bin ID</button>
+    </div>
+    <div id="bin-id-hint" style="font-size:12px; margin-top:4px; display:none;">
+      👆 Share this Bin ID with your team — they paste it above along with the API key.
+    </div>
+    <button onclick="saveApiKey()">Save & connect</button>
+  </div>
+
+  <div class="top-bar">
+    <div>
+      <h1>Backable call sheet</h1>
+      <p class="top-meta" id="top-meta"></p>
+    </div>
+    <div class="top-actions">
+      <span class="sync-label" id="sync-label" style="color:#aaa"></span>
+      <button class="btn-small" onclick="syncFromCloud()">↻ Refresh</button>
+      <button class="btn-small" onclick="exportNotes()" style="border-color:#1d9e75; color:#0f6e56;">⬇ Export notes</button>
+      <button class="btn-small" onclick="showSetup()">⚙️ Setup</button>
+    </div>
+  </div>
+
+  <div class="upload-zone" id="upload-zone"
+    onclick="document.getElementById('file-input').click()"
+    ondragover="event.preventDefault(); this.classList.add('drag-over')"
+    ondragleave="this.classList.remove('drag-over')"
+    ondrop="handleDrop(event)">
+    <p id="upload-label">↑ Drop your daily Excel here or click to browse</p>
+    <small>Columns: First Name, Last Name, Phone, Email, Signup Date, Everything Complete?, Profile Setup Complete?, Dream Analyser Complete?</small>
+    <input id="file-input" type="file" accept=".xlsx,.csv" style="display:none" onchange="handleFile(this.files[0])">
+  </div>
+
+  <div class="error-box" id="error-box" style="display:none"></div>
+
+  <div id="content" style="display:none">
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Remaining</div><div class="stat-value" id="stat-remaining" style="color:#1a1a18">0</div></div>
+      <div class="stat-card"><div class="stat-label">Reactivate</div><div class="stat-value" id="stat-reactivate" style="color:#533ab7">0</div></div>
+      <div class="stat-card"><div class="stat-label">Buy now</div><div class="stat-value" id="stat-buynow" style="color:#0f6e56">0</div></div>
+      <div class="stat-card"><div class="stat-label">📞 Called</div><div class="stat-value" id="stat-called" style="color:#6b6a65">0</div></div>
+      <div class="stat-card"><div class="stat-label">✉️ Emailed</div><div class="stat-value" id="stat-emailed" style="color:#185fa5">0</div></div>
+    </div>
+    <div id="pending-list"></div>
+    <div id="called-section" style="display:none">
+      <p class="section-label" id="called-section-label"></p>
+      <div id="called-list"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const TYPES = {
+  reactivate: { color: '#533ab7', bg: '#eeedfe', border: '#7f77dd', icon: '⚡', label: 'Reactivate call' },
+  buynow:     { color: '#0f6e56', bg: '#e1f5ee', border: '#1d9e75', icon: '💰', label: 'Buy now call' },
+  prompt1:    { color: '#854f0b', bg: '#faeeda', border: '#ef9f27', icon: '🔔', label: 'Prompt — Everything' },
+  prompt2:    { color: '#185fa5', bg: '#e6f1fb', border: '#378add', icon: '🔔', label: 'Prompt — next steps' },
+};
+
+let callerName = '';
+let contacts = [];
+let calledMap = {};
+let notesMap = {};
+let contactArchive = {}; // every contact ever seen, keyed by id
+let apiKey = localStorage.getItem('bb_api_key') || '';
+let binId = localStorage.getItem('bb_bin_id') || '';
+let syncTimer = null;
+
+// ── LOGIN ────────────────────────────────────────────────────────────────────
+const callerInput = document.getElementById('caller-input');
+const startBtn = document.getElementById('start-btn');
+callerInput.addEventListener('input', () => { startBtn.disabled = !callerInput.value.trim(); });
+callerInput.addEventListener('keydown', e => { if (e.key === 'Enter' && callerInput.value.trim()) startApp(); });
+
+function startApp() {
+  callerName = callerInput.value.trim();
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('main-screen').style.display = 'block';
+  document.getElementById('top-meta').textContent = 'Calling as ' + callerName;
+  if (!apiKey) document.getElementById('setup-banner').style.display = 'block';
+  syncFromCloud();
+  syncTimer = setInterval(syncFromCloud, 20000);
+}
+
+// ── SETUP ────────────────────────────────────────────────────────────────────
+function showSetup() {
+  const b = document.getElementById('setup-banner');
+  b.style.display = b.style.display === 'none' ? 'block' : 'none';
+  if (b.style.display === 'block') {
+    if (apiKey) document.getElementById('api-key-input').value = apiKey;
+    if (binId) showBinId();
+  }
+}
+
+function saveApiKey() {
+  apiKey = document.getElementById('api-key-input').value.trim();
+  binId  = document.getElementById('bin-id-input').value.trim();
+  if (!apiKey) { alert('Please enter your API key.'); return; }
+  localStorage.setItem('bb_api_key', apiKey);
+  localStorage.setItem('bb_bin_id', binId);
+  document.getElementById('setup-banner').style.display = 'none';
+  setSyncLabel('Connecting…', '#aaa');
+  syncFromCloud();
+}
+
+function copyBinId() {
+  navigator.clipboard.writeText(binId).then(() => {
+    const btn = document.getElementById('copy-bin-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy Bin ID'; }, 2000);
+  });
+}
+
+function showBinId() {
+  if (!binId) return;
+  const input = document.getElementById('bin-id-input');
+  const copyBtn = document.getElementById('copy-bin-btn');
+  const hint = document.getElementById('bin-id-hint');
+  if (input) { input.value = binId; input.style.fontWeight = '600'; input.style.color = '#185fa5'; }
+  if (copyBtn) copyBtn.style.display = 'inline-block';
+  if (hint) hint.style.display = 'block';
+}
+
+// ── JSONBIN SYNC ─────────────────────────────────────────────────────────────
+function setSyncLabel(text, color) {
+  const el = document.getElementById('sync-label');
+  el.textContent = text;
+  el.style.color = color || '#aaa';
+}
+
+async function syncFromCloud() {
+  if (!apiKey) return;
+  try {
+    setSyncLabel('Syncing…', '#aaa');
+    let url, opts;
+    if (binId) {
+      url = `https://api.jsonbin.io/v3/b/${binId}/latest`;
+      opts = { headers: { 'X-Master-Key': apiKey } };
+    } else {
+      setSyncLabel('No bin yet', '#aaa');
+      return;
+    }
+    const res = await fetch(url, opts);
+    if (!res.ok) { setSyncLabel('Sync error', '#a32d2d'); return; }
+    const data = await res.json();
+    const record = data.record || {};
+    if (record.calledMap) {
+      calledMap = record.calledMap;
+    }
+    if (record.notesMap) {
+      // Patch notes into already-rendered textareas without re-rendering
+      const incoming = record.notesMap;
+      Object.keys(incoming).forEach(id => {
+        const el = document.getElementById('note-' + id);
+        if (el && document.activeElement !== el) {
+          el.value = incoming[id]?.text || '';
+        }
+      });
+      notesMap = incoming;
+    }
+    if (record.contactArchive) {
+      contactArchive = record.contactArchive;
+    }
+    if (record.contacts && record.contacts.length) {
+      contacts = record.contacts;
+      document.getElementById('upload-label').textContent = '↑ Upload new Excel to refresh contact list';
+      document.getElementById('content').style.display = 'block';
+      const ts = record.updatedAt ? ` · Updated ${new Date(record.updatedAt).toLocaleString('en-AU', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}` : '';
+      document.getElementById('top-meta').textContent = 'Calling as ' + callerName + ts;
+    }
+    renderList();
+    setSyncLabel('✓ Synced', '#0f6e56');
+  } catch(e) {
+    setSyncLabel('Offline', '#aaa');
+  }
+}
+
+async function pushToCloud(payload) {
+  if (!apiKey) { saveLocally(payload); return; }
+  setSyncLabel('Saving…', '#aaa');
+  try {
+    let url, method;
+    if (!binId) {
+      url = 'https://api.jsonbin.io/v3/b';
+      method = 'POST';
+    } else {
+      url = `https://api.jsonbin.io/v3/b/${binId}`;
+      method = 'PUT';
+    }
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-Master-Key': apiKey, 'X-Bin-Name': 'backable-calls', 'X-Bin-Private': 'true' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) { setSyncLabel('Save failed', '#a32d2d'); return; }
+    const data = await res.json();
+    if (!binId && data.metadata?.id) {
+      binId = data.metadata.id;
+      localStorage.setItem('bb_bin_id', binId);
+      document.getElementById('bin-id-input').value = binId;
+      showBinId();
+      document.getElementById('setup-banner').style.display = 'block';
+    }
+    setSyncLabel('✓ Synced', '#0f6e56');
+    setTimeout(() => setSyncLabel('', '#aaa'), 3000);
+  } catch(e) {
+    setSyncLabel('Offline — saved locally', '#854f0b');
+    saveLocally(payload);
+  }
+}
+
+function saveLocally(payload) {
+  localStorage.setItem('bb_local_data', JSON.stringify(payload));
+}
+
+// ── FILE HANDLING ─────────────────────────────────────────────────────────────
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+}
+
+function handleFile(file) {
+  if (!file) return;
+  document.getElementById('error-box').style.display = 'none';
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      const result = processRows(rows);
+      if (result === null) { showError('Could not find a "Signup Date" column. Check your column headers.'); return; }
+
+      // Always fetch latest calledMap and notesMap from cloud before filtering
+      // so we never lose history that was saved in a previous session
+      if (apiKey && binId) {
+        try {
+          const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+            headers: { 'X-Master-Key': apiKey }
+          });
+          if (res.ok) {
+            const cloud = await res.json();
+            if (cloud.record?.calledMap) calledMap = cloud.record.calledMap;
+            if (cloud.record?.notesMap)  notesMap  = cloud.record.notesMap;
+          }
+        } catch(e) {}
+      }
+
+      // Merge all contacts into archive before filtering
+      result.forEach(c => { contactArchive[c.id] = { name: c.name, business: c.business, email: c.email, phone: c.phone }; });
+
+      // Filter out anyone already marked as called or emailed
+      contacts = result.filter(c => !calledMap[c.id]);
+      const carried = result.length - contacts.length;
+      document.getElementById('upload-label').textContent = '↑ Upload new Excel to refresh contact list' + (carried ? ` · ${carried} already contacted hidden` : '');
+      document.getElementById('content').style.display = 'block';
+      renderList();
+
+      // Only push contacts — never overwrite calledMap or notesMap
+      const payload = { contacts, calledMap, notesMap, contactArchive, updatedAt: new Date().toISOString(), updatedBy: callerName };
+      await pushToCloud(payload);
+    } catch(err) {
+      showError('Could not read file: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-box');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+// ── DATA PROCESSING ───────────────────────────────────────────────────────────
+function parseDate(val) {
+  if (!val) return null;
+  if (typeof val === 'number') {
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+    return isNaN(d) ? null : d;
+  }
+  const s = String(val).trim();
+  if (!s || s === 'N/A' || s === '—') return null;
+  // Handle DD/MM/YYYY and DD-MM-YYYY
+  const auSlash = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if (auSlash) {
+    const d = new Date(parseInt(auSlash[3]), parseInt(auSlash[2]) - 1, parseInt(auSlash[1]));
+    return isNaN(d) ? null : d;
+  }
+  // Handle "14 May 2026" style
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
+function daysSince(date) {
+  const now = new Date(); now.setHours(0,0,0,0);
+  const then = new Date(date); then.setHours(0,0,0,0);
+  return Math.floor((now - then) / 86400000);
+}
+
+function isYes(val) {
+  if (!val) return false;
+  const v = String(val).trim().toLowerCase();
+  return v === 'yes' || v === 'true' || v === '1' || v === 'y';
+}
+
+function processRows(rows) {
+  const m = {};
+  if (!rows.length) return [];
+  for (const key of Object.keys(rows[0])) {
+    const k = key.trim().toLowerCase();
+    if (k === 'contact name'  || k === 'contact_name')                              m.contact_name = key;
+    if (k === 'first name'    || k === 'first_name'   || k === 'first')             m.first        = key;
+    if (k === 'last name'     || k === 'last_name'    || k === 'last')              m.last         = key;
+    if (k === 'phone number'  || k === 'phone_number' || k.includes('phone'))       m.phone        = key;
+    if (k === 'email')                                                               m.email        = key;
+    if (k === 'business name' || k === 'business_name'|| k.includes('business'))    m.business     = key;
+    if (k === 'registration date' || k === 'signup date' || k === 'created_at' || k.includes('signup') || k.includes('registration')) m.signup = key;
+    if (k === 'everything completed?' || k === 'everything_complete' || k === 'everything complete') m.everything = key;
+    if (k === 'profile setup completed?' || k === 'profile setup complete' || k === 'profile_setup') m.profile    = key;
+    if (k === 'dream analyser completed?' || k === 'dream analyser complete' || k === 'dream_analyser') m.dream   = key;
+  }
+  if (!m.signup) return null;
+
+  const calls = [];
+  rows.forEach((row, idx) => {
+    const signupDate = parseDate(row[m.signup]);
+    if (!signupDate) return;
+    const days = daysSince(signupDate);
+    const evDone      = isYes(row[m.everything]);
+    const profileDone = isYes(row[m.profile]);
+    const dreamDone   = isYes(row[m.dream]);
+    const name     = (row[m.contact_name] || ((row[m.first] || '') + ' ' + (row[m.last] || '')).trim()) || 'Unknown';
+    const phone    = row[m.phone] || '—';
+    const email    = (row[m.email] || '').trim().toLowerCase();
+    const business = row[m.business] || '—';
+    const id       = email || 'row-' + idx;
+
+    let reason = null, type = null, priority = 9;
+    const feb2026 = new Date('2026-02-01');
+    feb2026.setHours(0,0,0,0);
+    const signupCopy = new Date(signupDate);
+    signupCopy.setHours(0,0,0,0);
+    const isPreFeb2026 = signupCopy < feb2026;
+
+    if (!evDone && days >= 3 && days < 14) {
+      reason = "Signed up but hasn't completed Everything (day " + days + ')';
+      type = 'prompt1'; priority = 1;
+    } else if (evDone && (!profileDone || !dreamDone) && days >= 3 && days < 14) {
+      const missing = [!profileDone && 'Profile Setup', !dreamDone && 'Dream Analyser'].filter(Boolean).join(' & ');
+      reason = 'Completed Everything — prompt to complete ' + missing + ' (day ' + days + ')';
+      type = 'prompt2'; priority = 2;
+    } else if (days === 14) {
+      reason = '2-week trial ending — convert to paid';
+      type = 'buynow'; priority = 3;
+    } else if (days > 14 || isPreFeb2026) {
+      reason = 'Signed up ' + signupDate.toLocaleDateString('en-AU', {day:'numeric',month:'short',year:'numeric'}) + ' — re-engage and reactivate';
+      type = 'reactivate'; priority = 4;
+    }
+
+    if (reason) calls.push({ id, name, phone, email, business, reason, type, priority, days });
+  });
+
+  return calls.sort((a, b) => a.priority - b.priority || a.days - b.days);
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+async function markContacted(id, method) {
+  // Save any note that's currently typed before re-render wipes it
+  const noteInput = document.getElementById('note-' + id);
+  if (noteInput && noteInput.value.trim()) {
+    notesMap[id] = { text: noteInput.value.trim(), by: callerName, at: new Date().toISOString() };
+  }
+  calledMap[id] = { by: callerName, at: new Date().toISOString(), method };
+  renderList();
+  const payload = { contacts, calledMap, notesMap, contactArchive, updatedAt: new Date().toISOString(), updatedBy: callerName };
+  await pushToCloud(payload);
+}
+
+async function saveNote(id) {
+  const input = document.getElementById('note-' + id);
+  if (!input) return;
+  const text = input.value;
+  notesMap[id] = { text, by: callerName, at: new Date().toISOString() };
+  // Update stats without rebuilding cards
+  updateStats();
+  const payload = { contacts, calledMap, notesMap, contactArchive, updatedAt: new Date().toISOString(), updatedBy: callerName };
+  await pushToCloud(payload);
+  const btn = document.getElementById('note-btn-' + id);
+  if (btn) { btn.textContent = 'Saved ✓'; btn.style.color = '#0f6e56'; setTimeout(() => { btn.textContent = 'Save'; btn.style.color = '#1a1a18'; }, 2000); }
+}
+
+function updateStats() {
+  const pending = contacts.filter(c => !calledMap[c.id]);
+  const called  = contacts.filter(c =>  calledMap[c.id]);
+  const calledOnly  = called.filter(c => (calledMap[c.id]?.method || 'call') === 'call');
+  const emailedOnly = called.filter(c => calledMap[c.id]?.method === 'email');
+  document.getElementById('stat-remaining').textContent  = pending.length;
+  document.getElementById('stat-reactivate').textContent = pending.filter(c => c.type === 'reactivate').length;
+  document.getElementById('stat-buynow').textContent     = pending.filter(c => c.type === 'buynow').length;
+  document.getElementById('stat-called').textContent     = calledOnly.length;
+  document.getElementById('stat-emailed').textContent    = emailedOnly.length;
+}
+
+function renderList() {
+  const pending = contacts.filter(c => !calledMap[c.id]);
+  const called  = contacts.filter(c =>  calledMap[c.id]);
+
+  const calledOnly  = called.filter(c => (calledMap[c.id]?.method || 'call') === 'call');
+  const emailedOnly = called.filter(c => calledMap[c.id]?.method === 'email');
+  document.getElementById('stat-remaining').textContent  = pending.length;
+  document.getElementById('stat-reactivate').textContent = pending.filter(c => c.type === 'reactivate').length;
+  document.getElementById('stat-buynow').textContent     = pending.filter(c => c.type === 'buynow').length;
+  document.getElementById('stat-called').textContent     = calledOnly.length;
+  document.getElementById('stat-emailed').textContent    = emailedOnly.length;
+
+  const pendingList = document.getElementById('pending-list');
+  pendingList.innerHTML = '';
+
+  if (!pending.length && !called.length) {
+    pendingList.innerHTML = '<p class="empty-msg">No calls needed today — everyone is on track.</p>';
+  } else if (!pending.length) {
+    pendingList.innerHTML = '<p class="done-msg">✓ All calls done for today.</p>';
+  } else {
+    pending.forEach(c => pendingList.appendChild(makeCard(c, false)));
+  }
+
+  const calledSection = document.getElementById('called-section');
+  const calledList    = document.getElementById('called-list');
+  calledList.innerHTML = '';
+  if (called.length) {
+    calledSection.style.display = 'block';
+    document.getElementById('called-section-label').textContent = 'Called today (' + called.length + ')';
+    called.forEach(c => calledList.appendChild(makeCard(c, true)));
+  } else {
+    calledSection.style.display = 'none';
+  }
+}
+
+function makeCard(c, isCalled) {
+  const t   = TYPES[c.type];
+  const div = document.createElement('div');
+  div.className = 'call-card' + (isCalled ? ' called' : '');
+  div.style.borderLeftColor = isCalled ? '#ccc' : t.border;
+  div.style.borderLeftWidth = '3px';
+  div.style.borderLeftStyle = 'solid';
+
+  const method = calledMap[c.id]?.method || 'call';
+  const methodIcon = method === 'email' ? '✉️' : '📞';
+  const methodLabel = method === 'email' ? 'Email sent' : 'Called';
+  const calledInfo = isCalled
+    ? `<span class="called-label">${methodIcon} ${methodLabel}</span>${calledMap[c.id]?.by ? '<p class="called-by">by ' + calledMap[c.id].by + '</p>' : ''}`
+    : `<div style="display:flex;gap:6px;">
+        <button class="btn-mark" onclick="markContacted('${c.id}','call')">📞 Called</button>
+        <button class="btn-mark btn-email" onclick="markContacted('${c.id}','email')">✉️ Emailed</button>
+       </div>`;
+
+  div.innerHTML = `
+    <div class="call-card-inner">
+      <div class="call-info">
+        <div class="call-name-row">
+          <span class="call-name">${c.name}</span>
+          <span class="badge" style="color:${t.color};background:${t.bg};border-color:${t.border}">${t.icon} ${t.label}</span>
+        </div>
+        <p class="call-reason">${c.reason}</p>
+        <div class="call-contact">
+          <span>📞 ${c.phone}</span>
+          ${c.email
+            ? `<span style="display:inline-flex;align-items:center;gap:6px;">
+                <a href="mailto:${c.email}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:#185fa5;text-decoration:underline;font-size:13px;">✉️ ${c.email}</a>
+                <button onclick="navigator.clipboard.writeText('${c.email}');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500);" style="font-size:11px;padding:2px 7px;border:0.5px solid #d0cec5;border-radius:5px;background:#fff;cursor:pointer;color:#6b6a65;font-family:inherit;">Copy</button>
+               </span>`
+            : '<span style="color:#6b6a65">✉️ —</span>'}
+        </div>
+      </div>
+      <div class="call-actions">
+        <span class="day-tag">Day ${c.days}</span>
+        ${calledInfo}
+      </div>
+    </div>
+    <div style="margin-top:10px; display:flex; gap:8px; align-items:flex-start;">
+      <textarea id="note-${c.id}" placeholder="Add a note..." rows="2"
+        style="flex:1; font-size:12px; padding:7px 10px; border:0.5px solid #d0cec5; border-radius:7px; font-family:inherit; color:#1a1a18; resize:vertical; line-height:1.4; background:#fafaf8;"
+        >${notesMap[c.id]?.text || ''}</textarea>
+      <button id="note-btn-${c.id}" onclick="saveNote('${c.id}')"
+        style="font-size:12px; padding:6px 10px; border:0.5px solid #d0cec5; border-radius:7px; background:#fff; color:#1a1a18; font-family:inherit; cursor:pointer; white-space:nowrap; flex-shrink:0; margin-top:1px;">Save</button>
+    </div>`;
+  return div;
+}
+
+function exportNotes() {
+  // Gather all notes — from active contacts AND archive
+  const allContacts = { ...contactArchive };
+  contacts.forEach(c => { allContacts[c.id] = c; });
+
+  const noteEntries = [];
+  Object.keys(notesMap).forEach(id => {
+    const note = notesMap[id];
+    if (!note?.text?.trim()) return;
+    const c = allContacts[id] || {};
+    const contacted = calledMap[id];
+    const method = contacted?.method === 'email' ? 'Emailed' : contacted ? 'Called' : 'Not yet contacted';
+    const takenBy = contacted?.by || note?.by || '—';
+    const date = contacted?.at
+      ? new Date(contacted.at).toLocaleDateString('en-AU', {day:'numeric', month:'short', year:'numeric'})
+      : note?.at
+        ? new Date(note.at).toLocaleDateString('en-AU', {day:'numeric', month:'short', year:'numeric'})
+        : '—';
+    noteEntries.push({
+      name: c.name || '—',
+      business: c.business || '—',
+      email: c.email || '—',
+      phone: c.phone || '—',
+      method,
+      note: note.text,
+      takenBy,
+      date
+    });
+  });
+
+  if (!noteEntries.length) { alert('No notes to export yet.'); return; }
+
+  // Show export modal
+  showExportModal(noteEntries);
+}
+
+function showExportModal(entries) {
+  const existing = document.getElementById('export-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'export-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;';
+
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:14px;padding:2rem;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;">
+      <h2 style="font-size:17px;font-weight:600;margin:0 0 6px;color:#1a1a18;">Export notes</h2>
+      <p style="font-size:13px;color:#6b6a65;margin:0 0 1.5rem;">${entries.length} note${entries.length!==1?'s':''} ready to export.</p>
+
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:1.5rem;">
+        <button onclick="downloadCSV()" style="padding:12px;border-radius:8px;border:0.5px solid #d0cec5;background:#fff;font-family:inherit;font-size:14px;cursor:pointer;text-align:left;color:#1a1a18;">
+          <strong>📄 Download CSV</strong><br>
+          <span style="font-size:12px;color:#6b6a65;">All notes with contact details — open in Excel or Sheets</span>
+        </button>
+        <button onclick="runAIAnalysis()" style="padding:12px;border-radius:8px;border:0.5px solid #1d9e75;background:#e1f5ee;font-family:inherit;font-size:14px;cursor:pointer;text-align:left;color:#0f6e56;">
+          <strong>🤖 AI analysis + download</strong><br>
+          <span style="font-size:12px;color:#0f6e56;">Groups notes by theme, highlights top concerns, prioritises feedback — then downloads</span>
+        </button>
+      </div>
+
+      <div id="ai-status" style="display:none;font-size:13px;color:#6b6a65;text-align:center;padding:1rem 0;">
+        Analysing ${entries.length} notes with AI…
+      </div>
+
+      <button onclick="document.getElementById('export-modal').remove()" style="width:100%;padding:8px;border-radius:8px;border:0.5px solid #d0cec5;background:#fff;font-family:inherit;font-size:13px;cursor:pointer;color:#6b6a65;">Cancel</button>
+    </div>`;
+
+  modal._entries = entries;
+  document.body.appendChild(modal);
+  window._exportEntries = entries;
+}
+
+function downloadCSV(entries) {
+  const data = entries || window._exportEntries;
+  if (!data) return;
+  const rows = [['Contact Name','Business Name','Email','Phone','Contact Method','Note','Taken By','Date']];
+  data.forEach(e => rows.push([e.name, e.business, e.email, e.phone, e.method, e.note.replace(/"/g,'""'), e.takenBy, e.date]));
+  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const week = new Date().toLocaleDateString('en-AU', {day:'numeric',month:'short',year:'numeric'}).replace(/ /g,'-');
+  a.href = url;
+  a.download = `Backable-Notes-${week}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  const modal = document.getElementById('export-modal');
+  if (modal) modal.remove();
+}
+
+async function runAIAnalysis() {
+  const entries = window._exportEntries;
+  if (!entries) return;
+
+  document.getElementById('ai-status').style.display = 'block';
+  document.querySelectorAll('#export-modal button').forEach(b => b.disabled = true);
+
+  const noteSummary = entries.map((e,i) =>
+    `${i+1}. Contact: ${e.name} (${e.business}) | Method: ${e.method} | Taken by: ${e.takenBy} | Note: ${e.note}`
+  ).join('\n');
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: `You are analysing call/email notes from a business account management team at Backable.ai, an AI-powered business platform.
+
+Here are the notes:
+${noteSummary}
+
+Return ONLY a JSON object (no markdown, no explanation) in this exact format:
+{
+  "themes": [
+    {
+      "name": "Theme name",
+      "priority": 1,
+      "count": 3,
+      "summary": "One sentence summary of this concern",
+      "entries": [1, 2, 5]
+    }
+  ],
+  "topConcern": "The single most common concern in one sentence",
+  "recommendation": "One actionable recommendation for the team"
+}`
+        }]
+      })
+    });
+
+    const aiData = await res.json();
+    const text = aiData.content?.[0]?.text || '';
+    const clean = text.replace(/```json|```/g, '').trim();
+    const analysis = JSON.parse(clean);
+
+    // Build enriched CSV with AI analysis
+    const rows = [
+      ['BACKABLE NOTES ANALYSIS — ' + new Date().toLocaleDateString('en-AU', {day:'numeric',month:'long',year:'numeric'})],
+      [],
+      ['TOP CONCERN', analysis.topConcern || '—'],
+      ['RECOMMENDATION', analysis.recommendation || '—'],
+      [],
+      ['THEMES BY PRIORITY'],
+      ['Priority', 'Theme', 'Count', 'Summary'],
+    ];
+
+    (analysis.themes || []).sort((a,b) => a.priority - b.priority).forEach(t => {
+      rows.push([t.priority, t.name, t.count, t.summary]);
+    });
+
+    rows.push([]);
+    rows.push(['ALL NOTES BY THEME']);
+    rows.push(['Theme', 'Contact Name', 'Business Name', 'Email', 'Phone', 'Contact Method', 'Note', 'Taken By', 'Date']);
+
+    (analysis.themes || []).sort((a,b) => a.priority - b.priority).forEach(t => {
+      (t.entries || []).forEach(idx => {
+        const e = entries[idx - 1];
+        if (!e) return;
+        rows.push([t.name, e.name, e.business, e.email, e.phone, e.method, e.note.replace(/"/g,'""'), e.takenBy, e.date]);
+      });
+    });
+
+    // Add uncategorised
+    const allIndexed = new Set((analysis.themes || []).flatMap(t => t.entries || []));
+    const uncategorised = entries.filter((_,i) => !allIndexed.has(i+1));
+    if (uncategorised.length) {
+      rows.push([]);
+      rows.push(['Uncategorised']);
+      uncategorised.forEach(e => {
+        rows.push(['Uncategorised', e.name, e.business, e.email, e.phone, e.method, e.note.replace(/"/g,'""'), e.takenBy, e.date]);
+      });
+    }
+
+    const csv = rows.map(r => Array.isArray(r) ? r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',') : `"${r}"`).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const week = new Date().toLocaleDateString('en-AU', {day:'numeric',month:'short',year:'numeric'}).replace(/ /g,'-');
+    a.href = url;
+    a.download = `Backable-Notes-AI-${week}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    document.getElementById('export-modal').remove();
+
+  } catch(err) {
+    document.getElementById('ai-status').textContent = 'AI analysis failed — downloading plain CSV instead.';
+    setTimeout(() => downloadCSV(entries), 1500);
+  }
+}
+</script>
+</body>
+</html>
