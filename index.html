@@ -260,19 +260,17 @@ async function syncFromCloud() {
       contactArchive = record.contactArchive;
     }
     if (record.contacts && record.contacts.length) {
-      // Re-derive reactivateStage for any contact missing it (e.g. saved before this feature existed)
       contacts = record.contacts.map(c => {
-        if (c.type === 'reactivate' && !c.reactivateStage) {
-          // We don't have the original completion fields, so default to notstarted
-          // The next CSV upload will set it correctly
-          c.reactivateStage = 'notstarted';
-        }
+        if (c.type === 'reactivate' && !c.reactivateStage) c.reactivateStage = 'notstarted';
         return c;
       });
       document.getElementById('upload-label').textContent = '↑ Upload new Excel to refresh contact list';
       document.getElementById('content').style.display = 'block';
+    }
+    if (record.updatedAt) {
       const ts = record.updatedAt ? ` · Updated ${new Date(record.updatedAt).toLocaleString('en-AU', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}` : '';
-      document.getElementById('top-meta').textContent = 'Calling as ' + callerName + ts;
+      const meta = document.getElementById('top-meta');
+      if (meta && callerName) meta.textContent = 'Calling as ' + callerName + ts;
     }
     renderList();
     setSyncLabel('✓ Synced', '#0f6e56');
@@ -366,7 +364,18 @@ function handleFile(file) {
       renderList();
 
       // Only push contacts — never overwrite calledMap or notesMap
-      const payload = { contacts, calledMap, notesMap, contactArchive, updatedAt: new Date().toISOString(), updatedBy: callerName };
+      // Push slim contacts + lightweight data to cloud
+      const slimContacts = contacts.map(c => ({
+        id: c.id, name: c.name, email: c.email, phone: c.phone,
+        business: c.business, reason: c.reason, type: c.type,
+        priority: c.priority, days: c.days, reactivateStage: c.reactivateStage || null
+      }));
+      const slimArchive = {};
+      Object.keys(contactArchive).forEach(id => {
+        const c = contactArchive[id];
+        slimArchive[id] = { name: c.name, business: c.business, email: c.email, phone: c.phone };
+      });
+      const payload = { contacts: slimContacts, calledMap, notesMap, contactArchive: slimArchive, updatedAt: new Date().toISOString(), updatedBy: callerName };
       await pushToCloud(payload);
     } catch(err) {
       showError('Could not read file: ' + err.message);
@@ -493,7 +502,7 @@ async function markContacted(id, method) {
   }
   calledMap[id] = { by: callerName, at: new Date().toISOString(), method };
   renderList();
-  const payload = { contacts, calledMap, notesMap, contactArchive, updatedAt: new Date().toISOString(), updatedBy: callerName };
+  const payload = { calledMap, notesMap, contactArchive, updatedAt: new Date().toISOString(), updatedBy: callerName };
   await pushToCloud(payload);
 }
 
@@ -504,7 +513,7 @@ async function saveNote(id) {
   notesMap[id] = { text, by: callerName, at: new Date().toISOString() };
   // Update stats without rebuilding cards
   updateStats();
-  const payload = { contacts, calledMap, notesMap, contactArchive, updatedAt: new Date().toISOString(), updatedBy: callerName };
+  const payload = { calledMap, notesMap, contactArchive, updatedAt: new Date().toISOString(), updatedBy: callerName };
   await pushToCloud(payload);
   const btn = document.getElementById('note-btn-' + id);
   if (btn) { btn.textContent = 'Saved ✓'; btn.style.color = '#0f6e56'; setTimeout(() => { btn.textContent = 'Save'; btn.style.color = '#1a1a18'; }, 2000); }
